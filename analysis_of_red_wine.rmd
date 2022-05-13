@@ -1,0 +1,938 @@
+---
+title: "Exploring the properties of red wine"
+author: "Randy Tilson"
+date: "04/01/2022"
+output: html_document
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+#load packages
+#install.packages("gtsummary")
+library(ggplot2)
+library(gtsummary)
+library(knitr)
+library(gridExtra)
+library(grid)
+library(dplyr)
+
+```
+
+```{r echo=FALSE, knitr_globals}
+# Set default options for knitr package
+knitr::opts_chunk$set(fig.width=7, fig.height=3) 
+knitr::opts_chunk$set(echo=FALSE) 
+knitr::opts_chunk$set(message=FALSE)
+knitr::opts_chunk$set(warning=FALSE) 
+
+```
+
+```{r Load_the_Data}
+# Load the Data
+RW <- read.csv("wineQualityReds.csv")
+# Subset the data to remove the x variable which is the index value
+RW <- subset(RW, select = -c(X))
+
+```
+
+
+```{r univariate_function}
+# Function to create a series of general overview plots
+univariate_func <- function(df,varName,binWidth){
+  require(ggplot2)
+  # Calculate quartiles
+  Q1 <- quantile(df[[varName]], prob = .25)
+  Q3 <- quantile(df[[varName]], prob = .75)
+  iqr<- IQR(df[[varName]])
+  # initial plot
+  ggplot(data = df, aes(x=get(varName))) +
+    geom_histogram(binwidth = binWidth, color = 'black', fill = '#33BDBB') +
+  # quartile plotting 
+  geom_vline(xintercept = Q1, col = "black" , lwd = 1) +
+  geom_vline(xintercept = Q3, col = "black" , lwd = 1) +
+  # outliers, max of 0 in-place for q1 to avoid negative results
+  geom_vline(xintercept = max(0, Q1 - (iqr * 1.5)), col = "gray", lwd = 2) + 
+  geom_vline(xintercept = Q3 + (iqr * 1.5), col = "gray", lwd = 2) +
+  # labels
+  geom_text(aes(x=mean(.data[[varName]]),label ="IQR",y = -5),colour="black")+
+  labs(title=paste(varName,
+                   'data distribution with IQR(Black) and Outliers(Gray)'),
+       x = paste(varName,'content'),
+       y = 'Count') 
+} 
+
+```
+
+
+```{r univariate_facet_function}
+# Function to create a faceted plot with the lowest and highest quality ratings
+univariate_facet_func <- function(df,varName,binWidth){
+  require(ggplot2)
+  # Isolate the 3 and 8 quality within a dataframe
+  DF <- RW[ which(RW$quality == 3 | RW$quality == 8),]
+  # Calculate quartiles
+  Q1 <- quantile(df[[varName]], prob = .25)
+  Q3 <- quantile(df[[varName]], prob = .75)
+  iqr<- IQR(df[[varName]])
+  # initial plot
+  ggplot(data = DF, aes(x=get(varName))) +
+    geom_histogram(binwidth = binWidth, color = 'black', fill = '#33BDBB') +
+  # quartile plotting
+  geom_vline(xintercept = Q1, col = "black" , lwd = 1) +
+  geom_vline(xintercept = Q3, col = "black" , lwd = 1) +
+  # outliers, max of 0 in-place for q1 to avoid negative results
+  geom_vline(xintercept = max(0, Q1 - (iqr * 1.5)), col = "gray", lwd = 2) + 
+  geom_vline(xintercept = Q3 + (iqr * 1.5), col = "gray", lwd = 2) +
+  # facet best and worst quality with variable
+  facet_wrap(~ quality, ncol = 1) +
+  # labels
+  geom_text(aes(x=mean(.data[[varName]]),label ="IQR",y = -.25),colour="black")+
+  labs(title=paste(varName,'within quality of worst (3) and best (8)'),
+      x = paste(varName,'content'),
+      y = 'Count') 
+} 
+
+```
+
+
+```{r tail_func}
+# Function for sampling and re-scaling tail data
+univariate_tail_func <- function(df,varName,binWidth,logBinwidth = binWidth, 
+                                 lowerlimit,upperlimit,baseline = 0) {
+  require(ggplot2)
+  # calculate quartiles 
+  Q1 <- quantile(df[[varName]], prob = .25)
+  Q3 <- quantile(df[[varName]], prob = .75)
+  iqr<- IQR(df[[varName]])
+  # Sample data without tail
+  s0<- ggplot(aes(x = get(varName)), data = df) +
+       geom_histogram(binwidth = binWidth)+
+       scale_x_continuous(limits = c(baseline,lowerlimit))+
+       geom_vline(xintercept = Q1, col = "black" , lwd = 1) +
+       geom_vline(xintercept = Q3, col = "black" , lwd = 1) +
+       geom_vline(xintercept = max(0, Q1 - (iqr * 1.5)), col = "gray", lwd = 2)+ 
+       geom_vline(xintercept = Q3 + (iqr * 1.5), col = "gray", lwd = 2) +
+       xlab('Without Tail')
+   #Sample only the tail
+  s1<- ggplot(aes(x = get(varName)), data = df) +
+       geom_histogram(binwidth = binWidth)+
+       scale_x_continuous(limits = c(lowerlimit,upperlimit)) +
+       xlab('Only Tail')
+  # Re-scale all data to be logarithmic
+  s2<- ggplot(aes(x = get(varName)), data = df) +
+       geom_histogram(binwidth = logBinwidth) +
+       scale_x_log10() +
+       geom_vline(xintercept = Q1, col = "black" , lwd = 1) +
+       geom_vline(xintercept = Q3, col = "black" , lwd = 1) +
+       geom_vline(xintercept = max(0, Q1 - (iqr * 1.5)), col = "gray", lwd = 2)+ 
+       geom_vline(xintercept = Q3 + (iqr * 1.5), col = "gray", lwd = 2) +
+       xlab('Logarithmic')
+        
+  grid.arrange(s0,s1,s2,ncol=3)
+}
+      
+```
+
+```{r bivariate_point_func}
+# function for scatter plot.
+bi_point_func <- function(df, varname1, varname2) {
+  require (ggplot2)
+  a <- df[,varname1]
+  b <- df[,varname2]
+  correlation <- cor(a,b)
+  g <-  ggplot(aes(x = factor(a), y = b), data = df) +
+          geom_jitter( alpha = .1) +
+          geom_boxplot(alpha =.5, color = 'blue') +
+          stat_summary(fun = "mean", geom = "point", color = "red", 
+                      shape = 8, size = 4) +
+          labs(title = paste('Cor =', round(correlation, digits = 2)), 
+          x = varname1,
+          y = varname2) +
+          theme(panel.background = element_rect(fill = '#B2D3D2', 
+                                                colour = 'black'))
+  return (g + geom_smooth(method = "lm", formula = 'y~x', size = .8,
+                          color = 'white',se=FALSE, alpha = .2, aes(group=1)))
+}
+
+```
+
+
+
+```{r bivariate_outilier_func}
+# function to remove outliers
+bi_outlier_func <- function(df, varname1, varname2){
+  require (ggplot2)
+  # calculate quartiles 
+  Q1 <- quantile(df[[varname2]], prob = .25)
+  Q3 <- quantile(df[[varname2]], prob = .75)
+  iqr<- IQR(df[[varname2]])
+  # Subset the dataframe to remove the outliers
+  sub <- subset(df, df[[varname2]] > Q1 - (iqr*1.5) & df[[varname2]] < Q3 + 
+                  (iqr*1.5))
+  a <- sub[,varname1]
+  b <- sub[,varname2]
+  # Find the correlation of subsetted data
+  correlation <- cor(a,b)
+  g <- ggplot(aes(x = factor(a), y = b), data = sub) +
+         geom_jitter( alpha = .1) +
+         geom_boxplot(alpha =.5, color = 'blue') +
+         stat_summary(fun = "mean", geom = "point", color = "red", 
+                     shape = 8, size = 4) +
+         labs(title = paste('Cor =', 
+                           round(correlation, digits = 2),
+                           ' (-) Outliers'), 
+                           x = varname1,
+                           y = varname2) 
+  return (g + geom_smooth(method = "lm", formula = 'y~x', size = .8,
+                          color = 'white',se=FALSE, alpha = .2, aes(group=1)))
+  
+}
+
+```
+
+```{r non_cat_bivariate_point_func}
+# function for scatter plot.
+nc_point_func <- function(df, varname1, varname2) {
+  require (ggplot2)
+  a <- df[,varname1]
+  b <- df[,varname2]
+  correlation <- cor(a,b)
+  g <-  ggplot(aes(x = a, y = b), data = df) +
+          geom_point( alpha = .8) +
+          labs(title = paste('Cor =', round(correlation, digits = 2)), 
+          x = varname1,
+          y = varname2) +
+          theme(panel.background = element_rect(fill = '#B2D3D2', 
+                                                colour = 'black'))
+  return (g + geom_smooth(method = "lm", formula = 'y~x', size = .8,
+                          color = 'white',se=FALSE, alpha = .2, aes(group=1)))
+}
+
+```
+
+```{r median_func}
+# Function to group and plot by variable name and calculate median at grouped level
+median_func <- function(df,var1,var2){
+  grouped <- group_by(df,get(var1)) 
+  GM <- summarize(grouped, m = median(as.numeric(get(var2))))
+  colnames(GM)[1] <- var1
+  #Plot
+  ggplot(aes(x = get(var1) ,y= m ), data = GM) +
+    geom_point(size = 5) +
+    labs(title = 'Grouped by "x", median of "y"', x = var1, y = var2)
+}
+
+```
+
+```{r median_value_func}
+# Function to group by variable name and return median value of grouping
+median_value_func <- function(df,var1,var2){
+  grouped <- group_by(df,get(var1)) 
+  GM <- summarize(grouped, m = median(as.numeric(get(var2))))
+  colnames(GM)[1] <- var1
+  return (GM)
+}
+
+```
+
+
+> **Red Wine Properties Data Exploration:**  This dataset explores the properties of red wine as determined by the given variables displayed below
+
+```{r extract_variables}
+# Print variable names
+names(RW)
+
+```
+> **Total Data Entries:** As shown below
+
+```{r total_data_points}
+# Find total entries
+length(t(RW))
+
+```
+
+> **Thoughts regarding variables:**  Given the variables, it is likely that "quality" is the best benchmark to measure against for correlations from within other variables.
+
+# Data Summary
+
+```{r Univariate_Summary}
+# Summarize the descriptive statistics of the dataframe
+summary(RW)
+
+```
+### Data summarized and grouped by quality rating
+
+```{r Univariate_SummaryGrouping}
+# Build table using gtsummary package
+RW %>%
+  tbl_summary(by = quality) %>%
+  modify_header(label ~ "**Variables As grouped by quality rating**") %>%
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3","stat_4","stat_5",
+                           "stat_6") 
+                         ~ "**Bold = Quality Value, N = Quality Value Sum**")%>%
+  modify_footnote(all_stat_cols() ~ 
+                    "As Shown, Variable Values Are: Median (IQR)") %>%
+  modify_caption("**Descriptive Statistics AS GROUPED BY Quality Rating**") %>%
+  bold_labels()
+
+```
+
+
+>Prior to plotting any variables, the data from within this table shows a few correlations already.  It appears as if the variables of alcohol, sulphates, chlorides, citric.acid, and volatile.acidity are all are somewhat correlated to the quality rating.
+
+
+# Univariate Plots Section
+
+> With a lack of domain knowledge and a need to better understand the distributions, all variables will be charted in combination with their IQR.  Also, standardized outlier markers will be put in place for better visualization of the distribution.  In addition, the quality variable will be faceted together with each individual variable.
+
+```{r Univariate_fixed.acidity}
+#Call univariate ggplot function
+univariate_func(RW,'fixed.acidity',.1)
+#call facet function
+univariate_facet_func(RW,'fixed.acidity',.1)
+
+```
+
+> **fixed.acidity:** Normal / slightly positive skewed distribution with outliers within the right tail.  In looking at the quality facet, I do not see that much of a correlation between this variable and quality.
+
+
+```{r Univariate_volatile.acidity}
+#Call univariate ggplot function
+univariate_func(RW,'volatile.acidity',.01)
+#call facet function
+univariate_facet_func(RW,'volatile.acidity',.01)
+
+```
+
+> **volatile.acidity:** Normal / slightly positive skewed distribution.  Some outlier data within the right tail.  It is possible that quality is affected by the content level of this variable with lower levels increasing the quality.
+
+
+```{r Univariate_citric.acid}
+#Call univariate ggplot function
+univariate_func(RW,'citric.acid',.01)
+#call facet function
+univariate_facet_func(RW,'citric.acid',.01)
+
+```
+
+
+> **citric.acid:** The first thing that I notice is the first bar in the histogram, why are there so many zero values?  I am not sure if this is possible for red wine.  The structure is multi-modal, which so far is a unique quality.  With it being multi-modal, there is a wide range of possible values without becoming outliers. I do want to disect the rest of the data and look for other zero values. 
+
+
+```{r examine_citric}
+
+zero_count <- round(colSums(RW==0)/nrow(RW)*100)
+zero_count
+
+```
+
+
+>In looking at the dataframe, 8% of all citric acid values are zero values, Whereas zero values do not exist within other variables.  This does lead me to believe that this is these values should be removed given the uncertainty and uncommon nature of this.   
+
+
+
+
+```{r subset_citric_zeros}
+#filter rows
+zero_find = apply(RW, 1, function(row) all(row !=0))
+
+#subset original dataframe
+RW <- RW[zero_find,]
+
+```
+
+
+
+
+
+
+```{r Univariate_residual.sugar}
+#Call univariate ggplot function
+univariate_func(RW,'residual.sugar',.1)
+#call facet function
+univariate_facet_func(RW,'residual.sugar',.1)
+#call tail function
+univariate_tail_func(RW,'residual.sugar',.1,.1,4,16)
+
+```
+
+> **residual.sugar:** Normal / slightly positive skewed distribution with one sided outliers.  The amount of outliers within the tail of this variable show a possible unique characteristic that would limit their discarding.  In re-scaling and looking at the tail sections, it does appear that a fair amount of data exists past the technical outlier that lies just shy of 4.  The correlation with quality seems to be lacking.
+
+```{r sugar_tail_percent}
+
+# Separate out the tail of sugar
+ST <- RW[ which(RW$residual.sugar > 3.5),]
+
+cat("Percent of original residual.sugar values that resides in the tail.
+Ordered from lowest to highest quality rating \n")
+
+# Find the percent of original whole in attempt to determine why tail exists
+for(i in 3:8){
+  rating <- (nrow(ST[ST$quality == i, ]) / nrow(RW[RW$quality == i, ])) * 100
+  print (rating)
+}
+
+
+```
+
+> In performing a calculation on the percent of each quality that resides within the tail, it appears as if the mid grade wines have the lowest amount of data within the tail.  This would infer that both the high grade and low grade wines possibly hold a higher content of this variable.  This could also be a result of the law of large number as well, given that the mid grade wines have a much higher total count to where more data is available.  This can be looked at in further detail within multivariate observations.
+
+
+```{r Univariate_chlorides}
+#Call univariate ggplot function
+univariate_func(RW,'chlorides',.01)
+#call facet function
+univariate_facet_func(RW,'chlorides',.01)
+#call tail function
+univariate_tail_func(RW,'chlorides',.01,.05, .15, .65)
+
+```
+
+
+> **chlorides:** This distribution is similiar to sugar with a very normal distribution followed by a very long tail to the right.  Of difference though would be the possible correlation with quaility.  Because of the tail, a logarithmic view was created, however the view seems inconclusive other than showing a small distribution past the .30 range.  It would appear as if lower chlorides may lead to higher quality wines  
+
+
+
+```{r Univariate_free.sulfur.dioxide}
+#Call univariate ggplot function
+univariate_func(RW,'free.sulfur.dioxide',1)
+#call facet function
+univariate_facet_func(RW,'free.sulfur.dioxide',1)
+#call tail function
+univariate_tail_func(RW,'free.sulfur.dioxide',1,.1, 30, 75)
+
+```
+
+
+> **free.sulfur.dioxide:** Positive skew with a large amount of data falling outside of Q1. Log scale shows a more even distribution.  Also, it is a pretty even distribution amongst the low and high quality which does not lead me towards correlation with quality. 
+
+
+```{r Univariate_total.sulfur.dioxide}
+#Call univariate ggplot function
+univariate_func(RW,'total.sulfur.dioxide',2)
+#call facet function
+univariate_facet_func(RW,'total.sulfur.dioxide',2)
+#call tail function
+univariate_tail_func(RW,'total.sulfur.dioxide',2,.1, 75, 300)
+```
+
+
+> **total.sulfur.dioxide:**  Similar distribution to that of free.sulfur.dioxide.  This would make sense given that they are measurements of similar properties.  Rescaling it logarithmically shows a more even distribution as well.  Its possible that higher values lead to higher quality, but it is certainly not a strong correlation so far.
+
+
+```{r Univariate_density}
+#Call univariate ggplot function
+univariate_func(RW,'density',.0001)
+#call facet function
+univariate_facet_func(RW,'density',.0001)
+  
+```
+
+
+> **density:**  Very normal distribution with outliers in the left and right tail.  Given the normalized distribution, I am not going to look into any tail features.  It appears as if a lower density may lead to a higher quality wine. 
+
+
+```{r Univariate_pH}
+#Call univariate ggplot function
+univariate_func(RW,'pH',.01)
+#call facet function
+univariate_facet_func(RW,'pH',.01)
+
+```
+
+
+> **pH:**  Normal distribution similiar to that of density.  A possible small correlation may exist though, with lower pH equaling higher quality.
+
+
+```{r Univariate_sulphates}
+#Call univariate ggplot function
+univariate_func(RW,'sulphates',.01)
+#call facet function
+univariate_facet_func(RW,'sulphates',.01)
+
+```
+
+> **sulphates:**  Normal distribution with outlier data within the right tail.  There is also a possible correlation with higher pH equaling higher quality.
+
+```{r Univariate_alcohol}
+#Call univariate ggplot function
+univariate_func(RW,'alcohol',.1)
+#call facet function
+univariate_facet_func(RW,'alcohol',.1)
+
+```
+
+
+> **alcohol:**  Long positively skewed tail.  There is not much in the way of outlier data though so at this time I will not look into the tail.  There does however seem to be a very large correlation between alcohol content and quality rating.  Higher alcohol seems to create higher quality. 
+
+
+```{r univariate_quality, fig.height=3, fig.width=7}
+#Call univariate ggplot function
+univariate_func(RW,'quality',1)
+```
+
+> **quality:**  Normal distribution with the majority of ratings being that of 5 and 6.
+
+
+<br/>
+<br/>
+
+# Univariate Analysis
+
+#### **Dataset structure:**
+This dataset has both normalized and positively skewed distributions.  Within the skewed distributions, all outliers lie within the right tail.  In some cases, the outliers appear to be more than outliers, this may point to conditions that are rare but very possible. 
+
+#### **Main feature of interest:**
+The main feature of interest is the quality variable and any given correlations from within the remaining variables of the dataset.
+
+#### **Dataset features to help investigate the main feature of interest:**
+The numerous apparent correlations will be very helpful to examine, particularly within the alcohol content.
+
+#### **New variables:**
+As of now, new variables have not been created. This may change as I proceed into bivariate and multivariate, however at this time the variables seem sufficient.
+
+#### **Unusual features and data cleaning:**
+First of all, I subsetted the dataframe to remove the x variable, which I determined not necessary for my analysis. Then The zero values within citric acid grabbed my attention.  Because of this, the dataframe was examined further to ensure this anomaly was isolated within this one specific variable.  Given that they were, these values were removed to ensure data completeness.  Also, in separating out the numerous outlier values within residual sugar, I was surprised to see that the low and high grade wines hold a larger percent of the outlier data.  As noted though, this could easily be due to a larger amount of data being available from other quality ratings, which could possibly lower their percentages to a more representative value.  Lastly, it seems as if the data is either structured with a positive skew, or normalized distribution, with some of these variables looking very similar in structure.
+
+</b>
+In general, the data is and was fairly clean and ready to examine outside of the zero values from within citric.acid
+
+
+
+# Bivariate Plots Section
+
+> In moving forward, I would like to further examine the relationships between these variables.  Based on my univariate analysis, I already have some assumptions towards possible correlations, specifically the correlation between alcohol and the quality rating.  I would like to start with a full data overview of all variables as compared to quality.  This may expose any other correlations within the quality rating, or within supporting variables.
+
+
+```{r fig.height=18, fig.width=12, bivariate_outliers}
+# Plots with outliers
+p1 <- bi_point_func(RW, 'quality', 'fixed.acidity')
+p2 <- bi_point_func(RW, 'quality', 'volatile.acidity')
+p3 <- bi_point_func(RW, 'quality', 'citric.acid')
+p4 <- bi_point_func(RW, 'quality', 'residual.sugar')
+p5 <- bi_point_func(RW, 'quality', 'chlorides')
+p6 <- bi_point_func(RW, 'quality', 'free.sulfur.dioxide')
+p7 <- bi_point_func(RW, 'quality', 'total.sulfur.dioxide')
+p8 <- bi_point_func(RW, 'quality', 'density')
+p9 <- bi_point_func(RW, 'quality', 'pH')
+p10 <- bi_point_func(RW, 'quality', 'sulphates')
+p11 <- bi_point_func(RW, 'quality', 'alcohol')
+
+# Plots without outliers
+p_1 <- bi_outlier_func(RW, 'quality', 'fixed.acidity')
+p_2 <- bi_outlier_func(RW, 'quality', 'volatile.acidity')
+p_3 <- bi_outlier_func(RW, 'quality', 'citric.acid')
+p_4 <- bi_outlier_func(RW, 'quality', 'residual.sugar')
+p_5 <- bi_outlier_func(RW, 'quality', 'chlorides')
+p_6 <- bi_outlier_func(RW, 'quality', 'free.sulfur.dioxide')
+p_7 <- bi_outlier_func(RW, 'quality', 'total.sulfur.dioxide')
+p_8 <- bi_outlier_func(RW, 'quality', 'density')
+p_9 <- bi_outlier_func(RW, 'quality', 'pH')
+p_10 <- bi_outlier_func(RW, 'quality', 'sulphates')
+p_11 <- bi_outlier_func(RW, 'quality', 'alcohol')
+
+
+
+grid.arrange(p1,p_1,p2,p_2,p3,p_3,p4,p_4,p5,p_5,p6,p_6,p7,p_7,
+             p8,p_8,p9,p_9,p10,p_10,p11,p_11, ncol = 4)
+```
+
+> This grid plots the overall distribution of each variable as it relates to the quality rating.  A linear regression line and associated correlation values are also plotted within each variable.  This provides a clear view towards the positive and negative correlated values.  Volatile.acidity appears to have a small negative correlation, while alcohol is closer to a moderate correlation.  Also, I can see the outlier data within residual.sugar and its association between quality levels much more clear now.  Most of these variables do contain a lot of outlier data.
+
+
+
+> Because of the outliers, the original distributions are compared against distributions with the outliers removed.  Correleation calculations are also compared against the original distribution calculations as well.  Interestingly enough, removing the outliers did not drastically change the correlations.  The majority of the outliers lie within the right tail of positively skewed distributions.  Given this, these outliers would equate to higher quantity levels of the given variable.  Within univarariate analyzation, it was found that the tail of residual.sugar was pretty evenly dispersed among all quality levels.  With this knowledge and now seeing the correlation comparisons as plotted above, it would appear as if outlier data does exist within all quality levels, thus its removal is inconsequential towards the analysis, other than to clean up the appearance of the plot.  Now it would be prudent to explore further variable correlations.
+
+```{r fig.height=3, fig.width=7, biplot_1}
+
+a1 <- median_func(RW,'quality','alcohol')
+
+a2 <- bi_point_func(RW, 'quality', 'alcohol')
+
+grid.arrange(a1,a2, ncol = 2)
+
+
+```
+
+> Plotting the main feature of quality rating with the variable of strongest correlation, alcohol.  The chart on the left represents the median alcohol content value at each quality level.  I would like to explore which supporting variables may have the highest correlation value with alcohol in an effort to isolate any dependencies.
+
+
+
+```{r biplot_2}
+# Show density plot to confirm alcohol bias
+dens <- ggplot(RW, aes(alcohol))
+dens + geom_density(aes(fill=factor(quality)), alpha=0.8)  
+```
+
+> Showing the alcohol density at each quality level
+
+
+```{r correlations}
+#cor(RW [,c('alcohol', 'quality')])
+cor(RW)
+```
+
+
+> A correlation table will be useful to hone in on any other possible correlated variables.  Given that alcohol has the strongetst correlation within quality, I would like to follow alcohol and identify a trail of association from within it.  If possible, I would like to follow each strongest correlation to the next in an effort to unfold any possible patterns.
+
+
+```{r fig.height=3, fig.width=7, biplot_3}
+# Compare median to quality to associate back to main feature
+d1 <- median_func(RW,'quality','density')
+# Plot associated variables with correlation
+d2 <- nc_point_func(RW, 'alcohol', 'density')
+
+grid.arrange(d1,d2, ncol =2 )
+```
+
+> Density is the strongest correlation with alcohol, the negative association with quality can also be seen within the plot to the upper left.
+
+
+```{r fig.height=3, fig.width=7, biplot_4}
+# Compare median to quality to associate back to main feature
+f1 <- median_func(RW,'quality','fixed.acidity')
+# Plot associated variables with correlation
+f2 <- nc_point_func(RW, 'density', 'fixed.acidity')
+
+grid.arrange(f1,f2, ncol = 2)
+```
+
+> Fixed.acidity has a strong correlation with density.  A slight positive assoction from within quality can also be noted within the plot to the left.
+
+```{r fig.height=3, fig.width=7, biplot_5}
+# Compare median to quality to associate back to main feature
+p1 <- median_func(RW,'quality','pH')
+# Plot associated variables with correlation
+p2 <- nc_point_func(RW,'fixed.acidity', 'pH')
+
+grid.arrange(p1,p2, ncol = 2)
+```
+
+> pH as shown, has a very strong relationship with fixed.acidity.  Given the nature of science, this makes sense.  A negative association with quality is also noted from within the leftmost plot. 
+
+
+
+```{r fig.height=3, fig.width=7, biplot_6}
+# Compare median to quality to associate back to main feature
+c1 <- median_func(RW,'quality','citric.acid')
+# Plot associated variables with correlation
+c2 <- nc_point_func(RW,'pH', 'citric.acid')
+
+grid.arrange(c1,c2, ncol = 2)
+```
+
+
+> Not suprisingly, pH has a strong correlation with another acid, citric.acid.  It is starting to become clear that acidity is part of a bigger picture in determining wine quality.
+
+```{r fig.height=3, fig.width=7, biplot_7}
+# Compare median to quality to associate back to main feature
+c1 <- median_func(RW,'quality','sulphates')
+# Plot associated variables with correlation
+c2 <- nc_point_func(RW,'citric.acid', 'sulphates')
+
+grid.arrange(c1,c2, ncol = 2)
+```
+
+> citric.acid does not contain a lot of strong associations, however I felt I should follow the path. Sulphates appear to be of importance for high quality wines. 
+
+
+```{r fig.height=3, fig.width=7, biplot_8}
+# Compare median to quality to associate back to main feature
+cl1 <- median_func(RW,'quality','chlorides')
+# Plot associated variables with correlation
+cl2 <- nc_point_func(RW,'sulphates', 'chlorides')
+
+grid.arrange(cl1,cl2, ncol = 2)
+```
+
+> Chlorides also did not hold a strong association from within sulphates, but it seemed to be the last within this group of possible associated variables.  Of note though is the negative association from within the quality rating.  
+
+```{r fig.height=2, fig.width=10.5, biplot_9}
+# Compare median to quality to associate back to main feature
+n1 <- median_func(RW,'quality','free.sulfur.dioxide')
+n2 <- median_func(RW,'quality','total.sulfur.dioxide')
+n3 <- median_func(RW,'quality','residual.sugar')
+
+grid.arrange(n1,n2,n3, ncol = 3)
+```
+
+> Lastly, a quick look at the remaining variables of free/total.sulfur.dioxide and residual.sugar as compared to median values at each quality rating.  Given the available data, an association withi quality is lacking from within these variables.
+
+# Bivariate Analysis
+Bivariate explorations produced some interesting findings.  Initially, the quality rating did not appear to have very many strong correlations. However, in following the variable of alcohol, qualitative associations were found from within most variables.  The thought of outliers was also explored within this section.  Several attempts were made to expose outliers as a potential problem within modeling the data, however it appears as if these outliers do not heavily impact the trajectory of any future regression modelling. 
+
+### Relationsips among variables
+Alcohol and quality do share a relationship, however it is the child relationships from within alcohol that are of the strongest from within the dataset.  Not surprisingly , all of the acidic variables, and pH share a strong correlation.
+
+### Interesting relationships
+The most interesting relationship is that of density.  It seems as if density falls right in the middle of alcohol and acidity levels. In essence, acting as a byproduct of the combined chemical reactions from within the other variables.
+
+### Strongest relationship
+Without surprise, the strongest relationship found is that of pH and acidity levels, strongest of which would be pH/fixed.acidity.
+
+
+# Multivariate Plots Section
+At a multivariate level, combining like variables would be helpful.  The dataframe will be standardized to achieve these results.
+
+
+```{r echo=FALSE, group_by_quality}
+
+# group all variables by quality
+grouped <- aggregate(
+            x = RW[c("fixed.acidity", "volatile.acidity", "citric.acid", 
+                     "residual.sugar","chlorides","free.sulfur.dioxide", 
+                     "total.sulfur.dioxide","density", "pH", "sulphates", 
+                     "alcohol")],
+            by = RW ["quality"],
+            FUN = mean, na.rm = TRUE
+)
+
+# standardize the variables without quality variable
+standardized <- as.data.frame(scale(grouped[2:12]))
+# add quality rating back into standardized dataframe
+standardized$quality <- grouped$quality
+```
+
+
+
+```{r echo=FALSE, fig.height=4, fig.width=10, positive_variables}
+
+ggplot(standardized, aes(x=quality)) +
+  geom_line(aes(y = alcohol, color='alcohol')) +
+  geom_line(aes(y = citric.acid, color ='citric.acid')) +
+  geom_line(aes(y = sulphates, color ='suphates')) +
+  ylab('Standardized content values')
+  
+
+```
+
+
+> Variables with positive quality associations are grouped by their mean at each quality rating and plotted plotted within a standardized format.  These variables are strongly associated with the underlying quality rating.  
+
+
+
+
+```{r echo=FALSE, fig.height=4, fig.width=10, negative_variables}
+
+ggplot(standardized, aes(x=quality)) +
+  geom_line(aes(y = density, color='density')) +
+  geom_line(aes(y = pH, color ='pH')) +
+  geom_line(aes(y = chlorides, color ='chlorides')) +
+  ylab('Standardized content values')
+
+```
+
+> Variables with negative quality associations are grouped by their mean at each quality rating and plotted within a standardized format. These variables are also strongly associated with the underlying quality rating. 
+
+```{r echo=FALSE, fig.height=4, fig.width=10, nuetral_variables}
+
+ggplot(standardized, aes(x=quality)) +
+  geom_line(aes(y = free.sulfur.dioxide, color='free.sulfur.dioxide')) +
+  geom_line(aes(y = total.sulfur.dioxide, color ='total.sulfur.dioxide')) +
+  geom_line(aes(y = residual.sugar, color ='residual.sugar')) +
+  ylab('Standardized content values')
+
+```
+
+> Variables that do not show an obvious association within quality are grouped by their quality rating and plotted within a standardized format.  Of interest is the appearance of an inverse quality between residual.sugar and sulfur.dioxide.
+
+
+
+```{r fig.height=4, fig.width=10, multiplot_2}
+mid = mean(RW$quality)
+ggplot(RW, aes(x = alcohol, y = density, color = quality)) +
+  scale_color_gradient2(midpoint = mid, high = '#060A60', 
+                        low = '#06F3DD', mid = 'white') +
+  geom_point(aes(), size = 3, alpha = 1) +
+  geom_smooth(method = 'lm', se = FALSE , formula = 'y ~ x', color = 'black') + 
+  scale_x_continuous(breaks = 1:15) 
+  
+```
+
+> Given the association between alchol and density, these variables are looked at within each quality rating.  This shows the highest quality ratings are of higher alcohol and lower density, with quality being the variable of choice for color formatting.
+
+
+
+```{r multiplot_3}
+ 
+ggplot(grouped, aes(fill=pH, y=alcohol, x=quality)) + 
+    geom_bar(position="stack", stat="identity")
+```
+
+
+> There also seems to be a correlation between alcohol, pH, and quality. This plot is simple, but it shows mean values grouped by quality rating.  Alcohol increases and pH decreases as quality ratings rise. 
+
+
+
+
+# Multivariate Analysis
+
+### Relationships
+Alcohol, density, and acidic levels all look to be decent indicators as to what quality rating a wine may be.
+
+### Surprising interactions
+Residual.sugar and its interaction within density, and alcohol was the most surprising feature I found.  Although the correlation is not strong, there does seem to be some significance to the fact that sugar levels are highest among high density values.  
+
+
+
+------
+
+
+
+# Final Plots and Summary
+Prior observations have shown the overall unison that the majority of these variables play towards deciding the quality level of red wine.  This theme will be depicted within the final plots.
+
+
+### Plot One
+```{r Plot_one, fig.height=4, fig.width=10}
+
+mid = mean(RW$quality)
+ggplot(RW, aes(x = alcohol, y = density, color = factor(quality))) +
+  scale_color_brewer(name="Quality Rating", palette = "RdYlGn") +
+  geom_point(aes(), size = 3, alpha = 1) +
+  geom_smooth(method = 'lm', se = FALSE , formula = 'y ~ x', color = 'black') + 
+  scale_x_continuous(breaks = 1:15) +
+  labs (title ="Alcohol And Density Shown As Compared To Quality Rating",
+        subtitle = "Quality Ratings Depicted Within Point Coloration",
+        x = "Alcohol %", y = 'Density As (g / cm^3)') +
+  theme(panel.background = element_rect(fill = 'gray')) 
+
+
+```
+
+### Description One
+This plot shows how alcohol percent and density work in unison to help determine the quality rating.  
+
+### Plot Two
+
+```{r Plot_two, echo=FALSE, fig.height=4, fig.width=10}
+
+ggplot(grouped, aes(fill=pH, y=alcohol, x=quality)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_x_continuous(breaks = grouped$quality) +
+  scale_y_continuous(breaks = 1:15) +
+  labs (title = "Median Alcohol and pH Levels",
+        subtitle = "Values Grouped @ Individual Quality Ratings",
+        y = "Alcohol %", x = "Quality Rating") +
+  theme(panel.background = element_rect(fill = 'gray'))
+   
+  
+```
+
+### Description Two
+This is a simple but powerful representation of how acidic levels and alcohol content influence the quality rating.  Higher alcohol and lower pH equate to higher quality ratings.
+
+
+
+### Plot Three
+```{r Plot_three, echo=FALSE, fig.height=5, fig.width=10}
+####################
+## Line charts of correlated values 
+
+g1<- ggplot(standardized, aes(x=quality)) +
+       geom_line(aes(y = alcohol, color='alcohol'),size = 1) +
+       geom_line(aes(y = citric.acid, color ='citric.acid'),size = 1) +
+       geom_line(aes(y = sulphates, color ='sulphates'),size =1 ) +
+       scale_color_manual(name='Values',
+                          breaks=c('alcohol','citric.acid',
+                                   'sulphates'),
+                          values=c('alcohol'='red','citric.acid' = 'blue',
+                                   'sulphates' = 'violet')) +
+       labs(title = 'Positive correlations',
+            subtitle = 'Values as associated with quality rating',
+            y = 'Scaled Combined Values',
+            x = 'Quality Rating')+
+       theme(panel.background = element_rect(fill = 'gray'))
+       
+
+g2<-ggplot(standardized, aes(x=quality)) +
+      geom_line(aes(y = density, color='density'),size = 1) +
+      geom_line(aes(y = pH, color ='pH'),size = 1) +
+      geom_line(aes(y = chlorides, color ='chlorides'), size = 1) +
+      scale_color_manual(name='Values',
+                        breaks=c('density','pH','chlorides'),
+                        values=c('density'='red',pH = 'blue',
+                                 'chlorides' = 'violet')) +
+      labs(title = 'Negative correlations',
+          subtitle = 'Values as associated with quality rating',
+          y = 'Scaled Combined Values',
+          x = 'Quality Rating')+
+      theme(panel.background = element_rect(fill = 'gray'))
+
+grid.arrange(g1,g2, ncol = 2,
+             top =textGrob("Positive & Negative Correlated Values",
+                           gp=gpar(fontsize=20,font=3)))
+
+
+
+################################
+##  Overall scatter plot at scaled values 
+
+################################
+##  Overall scatter plot at scaled values 
+
+st <- as.data.frame(scale(RW[1:12])) # Scale whole dataframe
+
+st$quality <- RW$quality #add quality rating back into standardized df w/O scale
+st$pavg <- (st$citric.acid+st$sulphates+st$alcohol)/3 #Sum and average Positives
+st$navg <- (st$pH+st$chlorides+st$density)/3 # Sum and average Negatives 
+mid <- mean(st$density)
+ggplot(st, aes(x = factor(quality), y = alcohol)) +
+  geom_jitter(aes(),size = 2) +
+  geom_boxplot(aes(),fill = '#09658A') +
+  stat_summary(aes(y = pavg, group = 1), geom = "line",size = 2, 
+               fun = median, color = "cyan")+
+  stat_summary(aes(y = pavg, group = 1), geom = "point", fun = median, 
+               size = 4, color = "cyan")+
+  stat_summary(aes(y = navg, group = 1), geom = "line", size =2,  
+               fun = median, color = "magenta")+
+  stat_summary(aes(y = navg, group = 1), geom = "point", fun = median, 
+               size = 4, color = "magenta") +
+  scale_color_gradient2(midpoint = mid, high = '#060A60', 
+                        low = '#06F3DD', mid = 'white') +
+  labs(title = 
+   "Multivariate Conditions Within Correlated Values Using Standardized Scaling",
+    x = "Quality Rating", 
+    y = "Alcohol %",
+    caption = "Correlated Median Values Are Combined And Shown As:
+    Positive:    citric.acid,   sulphates,   alcohol    (Blue) 
+    Negative:    pH,   chlorides,   density     (Magenta)") +
+  theme(panel.background = element_rect(fill = 'gray'),
+        plot.caption = element_text(hjust = 0, size = 12))
+              
+
+```
+
+### Description Three
+This is a view an overview of the most correlated variables and how they react from within the quality rating.  Values have all been standardized for ease of comparison.  To begin with, conditional means of positive and negative correlations are calculated and plotted individually.  Lastly, these items are combined on the lower chart into two lines, one positive, and one negative.  Given that alcohol is the single strongest correlated value, it is chosen for the y axis within the boxplot.   With this plot, it also becomes clear how all of these variables work in unison to produce the overall result of quality.
+
+------
+
+# Reflection
+The red wine dataset has 13 original variables and around 20,000 entries.  Domain knowledge would be beneficial, however with exploration this dataset can provide the information needed to help predict the quality of wine.  Because of my lack of domain knowledge I did need to first explore each individual variable.  Once this was complete, I was able to have a better idea of how to proceed from within the bivariate and multivariate explorations.  
+
+The dominant correlation from within quality is alcohol.  On its own, I do believe that alcohol can provide a fair level of predictability towards quality, however it should be noted that alcohol does not exist in unison.  Without the remaining supporting variables, its predictability would undoubtedly diminish.  I should also note that on a personal level, I do ponder the question as to why alcohol is such a strong predictor given the subjectivity of a human created quality rating system.  Is this a matter of conditioning, where an individual is used to the taste of the higher alcohol and its given physiological effects, and thus ratings increase when this taste is discovered?
+<br>
+<br>
+Overall, the main difficulties that I ran into were that of domain knowledge.  It is more difficult to trust the results when lacking a foundation of knowledge.  As an example, I was unsure of the zero values from within citric acid.  I was not sure if these values were possible or not, but they did seem out of place.  I tested the data with and without these entries and I did not notice a significant difference without, so I did ultimately decide upon their removal.
+<br>
+<br> 
+The primary limitations from within the dataset are from within the lack of data observations at higher and lower quality levels.  It can be assumed that these ratings are unique, however a larger sample size would be nice.  To achieve this, an larger overall dataset can be acquired and then randomly sampled to where all quality levels have the same number of entries.
+<br>
+<br>
+
+
+### References
+Sjoberg DD, Whiting K, Curry M, Lavery JA, Larmarange J. Reproducible summary tables with the gtsummary package.
+The R Journal 2021;13:570–80. https://doi.org/10.32614/RJ-2021-053.
+<br>
+<br>
+Winston Chang, Cookbook for R <br>
+http://www.cookbook-r.com/
+
+    
+
+
+
+
+
+
